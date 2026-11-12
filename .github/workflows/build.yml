@@ -11,43 +11,58 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Download repository files
+      # 1. Checkout repository
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 2. Find and extract latest ZIP
+      # 2. Find latest ZIP and extract project
       - name: Extract Latest EGX Code Version
+        shell: bash
         run: |
-          ZIP_FILE=$(find . -maxdepth 2 -type f -iname "egx code v*.zip" | sort -V | tail -n 1)
+          set -e
+
+          echo "Searching for EGX Code ZIP files..."
+
+          ZIP_FILE=$(find . -type f -iname "*.zip" \
+            -not -path "./.git/*" \
+            | sort -V | tail -n 1)
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: No EGX Code ZIP file found!"
+            echo "ERROR: No ZIP file found!"
+            find . -maxdepth 4 -type f
             exit 1
           fi
 
-          echo "Selected version: $ZIP_FILE"
+          echo "Selected ZIP: $ZIP_FILE"
 
           mkdir -p /tmp/egx-update
 
           unzip -oq "$ZIP_FILE" -d /tmp/egx-update
 
-          PROJECT_DIR=$(find /tmp/egx-update -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit | xargs -r dirname)
+          SETTINGS_FILE=$(find /tmp/egx-update -type f \
+            \( -name "settings.gradle" -o -name "settings.gradle.kts" \) \
+            -print -quit)
 
-          if [ -z "$PROJECT_DIR" ]; then
+          if [ -z "$SETTINGS_FILE" ]; then
             echo "ERROR: Android project not found inside ZIP!"
             exit 1
           fi
+
+          PROJECT_DIR=$(dirname "$SETTINGS_FILE")
 
           echo "Project directory: $PROJECT_DIR"
 
           cp -a "$PROJECT_DIR"/. .
 
-          if [ ! -f "app/build.gradle" ] && [ ! -f "app/build.gradle.kts" ]; then
+          if [ ! -f "app/build.gradle" ] && \
+             [ ! -f "app/build.gradle.kts" ]; then
             echo "ERROR: App Gradle file not found!"
             exit 1
           fi
 
-      # 3. Setup Java
+          echo "EGX Code project extracted successfully!"
+
+      # 3. Setup Java 17
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -65,7 +80,10 @@ jobs:
         continue-on-error: true
         run: |
           mkdir -p app/src/main/assets
-          curl -fsSL "https://raw.githubusercontent.com/google/fonts/main/ofl/alexandria/Alexandria%5Bwght%5D.ttf" -o app/src/main/assets/Alexandria.ttf
+
+          curl -fsSL \
+            "https://raw.githubusercontent.com/google/fonts/main/ofl/alexandria/Alexandria%5Bwght%5D.ttf" \
+            -o app/src/main/assets/Alexandria.ttf
 
       # 6. Build APK
       - name: Build Debug APK
